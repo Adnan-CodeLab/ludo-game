@@ -1,0 +1,94 @@
+Index.html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Ludo Royale — Custom Rules Multiplayer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Lobby -->
+    <section id="lobby" class="screen">
+      <div class="lobby-card">
+        <h1 class="logo">LUDO <span>ROYALE</span></h1>
+        <p class="tagline">Custom-ruled online multiplayer · 2 dice · mandatory captures</p>
+        <label>Your name
+          <input id="nameInput" type="text" maxlength="14" placeholder="Player name" />
+        </label>
+        <div class="lobby-actions">
+          <button id="createBtn" class="btn btn-primary">Create Room</button>
+          <div class="join-row">
+            <input id="codeInput" type="text" maxlength="5" placeholder="ROOM CODE" />
+            <button id="joinBtn" class="btn">Join</button>
+          </div>
+        </div>
+        <div id="lobbyError" class="err"></div>
+        <details class="rules">
+          <summary>Custom Rules</summary>
+          <ul>
+            <li>All 4 tokens start active. No "roll-6-to-start".</li>
+            <li>Two dice; reduced to one when you have 3 tokens in your home lane.</li>
+            <li>Both dice must be used (separately, or combined on one token).</li>
+            <li>Bonus turn only on double 6 — never for captures or finishing.</li>
+            <li>Captured tokens respawn at their start (not in jail).</li>
+            <li>If you can capture, you MUST. Skipping a capture sends your guilty token back to start.</li>
+            <li>Exact roll needed to reach home. Home lane is uncapturable.</li>
+          </ul>
+        </details>
+      </div>
+    </section>
+
+    <!-- Room (waiting + in-game) -->
+    <section id="game" class="screen hidden">
+      <header class="topbar">
+        <div class="room-info">
+          <span class="room-label">ROOM</span>
+          <span id="roomCode" class="room-code">—</span>
+          <button id="copyCodeBtn" class="btn-mini" title="Copy">⧉</button>
+        </div>
+        <div id="turnIndicator" class="turn">Waiting…</div>
+        <button id="leaveBtn" class="btn-mini danger">Leave</button>
+      </header>
+
+      <div class="game-grid">
+        <aside class="sidebar left">
+          <h3>Players</h3>
+          <ul id="playerList" class="player-list"></ul>
+          <button id="startBtn" class="btn btn-primary hidden">Start Game</button>
+          <div id="warnBox" class="warn hidden"></div>
+        </aside>
+
+        <div class="board-wrap">
+          <div id="board" class="board" role="grid" aria-label="Ludo board"></div>
+        </div>
+
+        <aside class="sidebar right">
+          <div class="dice-area">
+            <div class="dice-row">
+              <div id="die1" class="die">?</div>
+              <div id="die2" class="die">?</div>
+            </div>
+            <button id="rollBtn" class="btn btn-primary" disabled>Roll Dice</button>
+            <div id="moveHint" class="hint"></div>
+          </div>
+          <h4>Activity</h4>
+          <ol id="log" class="log"></ol>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Winner overlay -->
+    <div id="winOverlay" class="overlay hidden">
+      <div class="win-card">
+        <h2>🏆 <span id="winnerText">—</span> wins!</h2>
+        <button id="winCloseBtn" class="btn btn-primary">Back to Lobby</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

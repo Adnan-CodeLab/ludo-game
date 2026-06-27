@@ -1,4 +1,3 @@
-Index.html
 <!doctype html>
 <html lang="en">
 <head>
@@ -50,7 +49,10 @@ Index.html
           <button id="copyCodeBtn" class="btn-mini" title="Copy">⧉</button>
         </div>
         <div id="turnIndicator" class="turn">Waiting…</div>
-        <button id="leaveBtn" class="btn-mini danger">Leave</button>
+        <div class="topbar-actions">
+          <button id="micBtn" class="btn-mini" title="Toggle mic">🎤 Mic off</button>
+          <button id="leaveBtn" class="btn-mini danger">Leave</button>
+        </div>
       </header>
 
       <div class="game-grid">
@@ -63,19 +65,31 @@ Index.html
 
         <div class="board-wrap">
           <div id="board" class="board" role="grid" aria-label="Ludo board"></div>
-        </div>
 
-        <aside class="sidebar right">
           <div class="dice-area">
             <div class="dice-row">
               <div id="die1" class="die">?</div>
               <div id="die2" class="die">?</div>
             </div>
-            <button id="rollBtn" class="btn btn-primary" disabled>Roll Dice</button>
+            <div class="dice-actions">
+              <button id="rollBtn" class="btn btn-primary" disabled>Roll Dice</button>
+              <button id="combinedBtn" class="btn hidden" title="Use both dice on one token">Combined ?</button>
+              <button id="cancelMoveBtn" class="btn hidden">Cancel</button>
+            </div>
             <div id="moveHint" class="hint"></div>
           </div>
+        </div>
+
+        <aside class="sidebar right">
           <h4>Activity</h4>
           <ol id="log" class="log"></ol>
+
+          <h4>Chat</h4>
+          <div id="chatBox" class="chat"></div>
+          <form id="chatForm" class="chat-form" autocomplete="off">
+            <input id="chatInput" type="text" maxlength="280" placeholder="Type a message…" />
+            <button class="btn btn-primary" type="submit">Send</button>
+          </form>
         </aside>
       </div>
     </section>
@@ -87,6 +101,9 @@ Index.html
         <button id="winCloseBtn" class="btn btn-primary">Back to Lobby</button>
       </div>
     </div>
+
+    <!-- Hidden audio sink for remote voice streams -->
+    <div id="audioSink" aria-hidden="true" style="position:absolute;left:-9999px;"></div>
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>

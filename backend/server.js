@@ -33,7 +33,6 @@ function nextTurn(room) {
   if (room.finished) return;
   for (let i = 0; i < room.seatedColors.length; i++) {
     room.turnIndex = (room.turnIndex + 1) % room.seatedColors.length;
-    // skip if that player already won (all finished)
     const c = room.seatedColors[room.turnIndex];
     if (!allFinished(room.state.players[c])) break;
   }
@@ -57,6 +56,15 @@ io.on('connection', (socket) => {
     if (r.error) return cb?.({ ok: false, error: r.error });
     socket.join(code);
     cb?.({ ok: true, code, you: r.player });
+    // Tell the new joiner about existing peers so they can dial them for voice.
+    const peers = r.room.players
+      .filter(p => p.socketId !== socket.id)
+      .map(p => ({ socketId: p.socketId, name: p.name, color: p.color }));
+    socket.emit('voice:peers', { peers });
+    // And tell existing peers that someone joined (so they can prepare to accept offers).
+    socket.to(code).emit('voice:peer-joined', {
+      socketId: socket.id, name: r.player.name, color: r.player.color,
+    });
     broadcast(r.room);
   });
 
@@ -66,7 +74,6 @@ io.on('connection', (socket) => {
     if (room.hostId !== socket.id) return cb?.({ ok: false, error: 'Only host can start' });
     if (room.players.length < 2) return cb?.({ ok: false, error: 'Need at least 2 players' });
     room.started = true;
-    // Turn order follows COLORS order so the board feels consistent.
     const order = ['red', 'green', 'yellow', 'blue'];
     room.seatedColors = order.filter(c => room.players.some(p => p.color === c));
     room.turnIndex = 0;
@@ -92,7 +99,6 @@ io.on('connection', (socket) => {
 
     pushLog(room, `${turnColor} rolled ${dice.join(' + ')}`);
 
-    // If no legal moves at all, skip turn.
     if (plans.length === 0) {
       pushLog(room, `${turnColor} has no legal moves — turn skipped`);
       nextTurn(room);
@@ -103,7 +109,6 @@ io.on('connection', (socket) => {
     cb?.({ ok: true, dice });
   });
 
-  // Player commits a plan: an ordered list of {tokenIdx, die}.
   socket.on('move:commit', ({ code, moves }, cb) => {
     const room = getRoom(code);
     if (!room || !room.awaitingMove) return cb?.({ ok: false, error: 'No move expected' });
@@ -111,34 +116,24 @@ io.on('connection', (socket) => {
     const me = room.players.find(p => p.socketId === socket.id);
     if (!me || me.color !== turnColor) return cb?.({ ok: false, error: 'Not your turn' });
 
-    // Find a matching plan among the enumerated plans.
     const norm = (mv) => mv.map(m => `${m.tokenIdx}:${m.die}:${m.skipped?1:0}`).join('|');
     const wanted = norm(moves);
     const chosen = room.plans.find(p => norm(p.moves) === wanted);
     if (!chosen) return cb?.({ ok: false, error: 'Illegal move' });
 
-    // Mandatory kill enforcement.
     const violates = violatesMandatoryKill(room.plans, chosen);
     let punishedToken = null;
-    if (violates) {
-      punishedToken = findGuiltyToken(room.state, turnColor, room.plans);
-    }
+    if (violates) punishedToken = findGuiltyToken(room.state, turnColor, room.plans);
 
-    // Apply the plan.
     for (const m of chosen.moves) {
       if (m.skipped) continue;
       const sim = simulateMove(room.state, turnColor, m.tokenIdx, m.steps);
       if (!sim.ok) return cb?.({ ok: false, error: 'Illegal step' });
       applyMoveToSnapshot(room.state, turnColor, m.tokenIdx, sim);
-      if (sim.capture) {
-        pushLog(room, `${turnColor} captured ${sim.capture.color}'s token`);
-      }
-      if (sim.finished) {
-        pushLog(room, `${turnColor} brought a token home`);
-      }
+      if (sim.capture) pushLog(room, `${turnColor} captured ${sim.capture.color}'s token`);
+      if (sim.finished) pushLog(room, `${turnColor} brought a token home`);
     }
 
-    // Punishment: send guilty token back to start.
     if (punishedToken !== null && punishedToken >= 0) {
       const t = room.state.players[turnColor].tokens[punishedToken];
       if (!t.finished) {
@@ -147,7 +142,6 @@ io.on('connection', (socket) => {
       }
     }
 
-    // Win check.
     if (allFinished(room.state.players[turnColor])) {
       room.finished = true;
       room.winner = turnColor;
@@ -156,7 +150,6 @@ io.on('connection', (socket) => {
       return cb?.({ ok: true, win: true });
     }
 
-    // Bonus turn: only if two dice and both were 6.
     const bonus = room.dice.length === 2 && room.dice[0] === 6 && room.dice[1] === 6;
     if (bonus) {
       pushLog(room, `${turnColor} rolled double 6 — bonus turn!`);
@@ -171,9 +164,42 @@ io.on('connection', (socket) => {
     cb?.({ ok: true });
   });
 
+  /* ---------- Chat ---------- */
+  socket.on('chat:message', ({ code, text }, cb) => {
+    const room = getRoom(code);
+    if (!room) return cb?.({ ok: false });
+    const p = room.players.find(x => x.socketId === socket.id);
+    if (!p) return cb?.({ ok: false });
+    const msg = String(text || '').slice(0, 300).trim();
+    if (!msg) return cb?.({ ok: false });
+    const payload = {
+      t: Date.now(),
+      socketId: socket.id,
+      name: p.name,
+      color: p.color,
+      text: msg,
+    };
+    io.to(code).emit('chat:message', payload);
+    cb?.({ ok: true });
+  });
+
+  /* ---------- WebRTC voice signaling ---------- */
+  // All payloads are forwarded blindly to `to` (a socket id in the same room).
+  socket.on('voice:signal', ({ to, data }) => {
+    if (!to) return;
+    io.to(to).emit('voice:signal', { from: socket.id, data });
+  });
+  socket.on('voice:mute', ({ code, muted }) => {
+    if (!code) return;
+    socket.to(code).emit('voice:mute', { from: socket.id, muted: !!muted });
+  });
+
   socket.on('disconnect', () => {
     const r = removePlayer(socket.id);
-    if (r.room) broadcast(r.room);
+    if (r.room) {
+      r.room && io.to(r.room.code).emit('voice:peer-left', { socketId: socket.id });
+      broadcast(r.room);
+    }
   });
 });
 
